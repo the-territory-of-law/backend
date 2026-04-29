@@ -1,0 +1,119 @@
+name: notify-telegram
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, closed]
+  workflow_run:
+    workflows: ["CI", "Security"]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success')
+
+    steps:
+      - name: Send Telegram message
+        shell: bash
+        env:
+          TG_BOT_TOKEN: "${{ secrets.TG_BOT_TOKEN }}"
+          TG_CHAT_ID: "${{ secrets.TG_CHAT_ID }}"
+          GH_TOKEN: "${{ github.token }}"
+          EVENT_NAME: "${{ github.event_name }}"
+        run: |
+          set -euo pipefail
+
+          if [ -z "${TG_BOT_TOKEN:-}" ]; then
+            echo "TG_BOT_TOKEN is empty; skipping Telegram notification"
+            exit 0
+          fi
+
+          if [ -z "${TG_CHAT_ID:-}" ]; then
+            echo "TG_CHAT_ID is empty; skipping Telegram notification"
+            exit 0
+          fi
+
+          if [ "$EVENT_NAME" = "workflow_run" ]; then
+            REPO="$(jq -r '.repository.full_name' "$GITHUB_EVENT_PATH")"
+            RUN_ID="$(jq -r '.workflow_run.id' "$GITHUB_EVENT_PATH")"
+            WORKFLOW="$(jq -r '.workflow_run.name' "$GITHUB_EVENT_PATH")"
+            BRANCH="$(jq -r '.workflow_run.head_branch // "unknown"' "$GITHUB_EVENT_PATH")"
+            ACTOR="$(jq -r '.workflow_run.triggering_actor.login // .workflow_run.actor.login // "unknown"' "$GITHUB_EVENT_PATH")"
+            COMMIT_SHA="$(jq -r '.workflow_run.head_sha // "unknown"' "$GITHUB_EVENT_PATH")"
+            COMMIT_TITLE="$(jq -r '.workflow_run.head_commit.message // "" | split("\n")[0]' "$GITHUB_EVENT_PATH")"
+            COMMIT_AUTHOR="$(jq -r '.workflow_run.head_commit.author.name // .workflow_run.head_commit.author.email // .workflow_run.triggering_actor.login // .workflow_run.actor.login // "unknown"' "$GITHUB_EVENT_PATH")"
+            COMMIT_URL="https://github.com/${REPO}/commit/${COMMIT_SHA}"
+            RUN_URL="$(jq -r '.workflow_run.html_url' "$GITHUB_EVENT_PATH")"
+
+            JOBS_JSON="$(curl -fsSL \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${GITHUB_API_URL}/repos/${REPO}/actions/runs/${RUN_ID}/jobs?filter=latest&per_page=100")"
+
+            FAILED_JOBS="$(echo "$JOBS_JSON" | jq -r '
+              .jobs[]
+              | select(.conclusion != null and .conclusion != "success" and .conclusion != "skipped")
+              | "- " + .name + " (" + .conclusion + ")" +
+                (
+                  [
+                    .steps[]?
+                    | select(.conclusion != null and .conclusion != "success" and .conclusion != "skipped")
+                    | .name
+                  ] as $failed_steps
+                  | if ($failed_steps | length) > 0
+                    then "\n  Step: " + ($failed_steps | join(", "))
+                    else ""
+                    end
+                )
+            ')"
+
+            if [ -z "$FAILED_JOBS" ]; then
+              FAILED_JOBS="No failed jobs found via API"
+            fi
+
+            TEXT="$(printf '[FAIL] Workflow failed\nRepo: %s\nWorkflow: %s\nBranch: %s\nActor: %s\n\nCommit: %s\nCommit title: %s\nCommit author: %s\nCommit URL: %s\n\nFailed jobs:\n%s\n\nRun URL: %s' \
+              "$REPO" "$WORKFLOW" "$BRANCH" "$ACTOR" "$COMMIT_SHA" "$COMMIT_TITLE" "$COMMIT_AUTHOR" "$COMMIT_URL" "$FAILED_JOBS" "$RUN_URL")"
+
+          elif [ "$EVENT_NAME" = "pull_request" ]; then
+            ACTION="$(jq -r '.action' "$GITHUB_EVENT_PATH")"
+            REPO="$(jq -r '.repository.full_name' "$GITHUB_EVENT_PATH")"
+            PR_NUMBER="$(jq -r '.pull_request.number' "$GITHUB_EVENT_PATH")"
+            PR_TITLE="$(jq -r '.pull_request.title' "$GITHUB_EVENT_PATH")"
+            HEAD_BRANCH="$(jq -r '.pull_request.head.ref' "$GITHUB_EVENT_PATH")"
+            BASE_BRANCH="$(jq -r '.pull_request.base.ref' "$GITHUB_EVENT_PATH")"
+            ACTOR="$(jq -r '.sender.login' "$GITHUB_EVENT_PATH")"
+            URL="$(jq -r '.pull_request.html_url' "$GITHUB_EVENT_PATH")"
+
+            TEXT="$(printf '[PR] PR %s\nRepo: %s\nPR: #%s\nTitle: %s\nBranch: %s -> %s\nActor: %s\nURL: %s' \
+              "$ACTION" "$REPO" "$PR_NUMBER" "$PR_TITLE" "$HEAD_BRANCH" "$BASE_BRANCH" "$ACTOR" "$URL")"
+          fi
+
+          TEXT="$(printf '%s' "$TEXT" | head -c 3900)"
+
+          RESPONSE="$(curl -sS -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TG_CHAT_ID}" \
+            --data-urlencode "text=${TEXT}" \
+            --data-urlencode "disable_web_page_preview=true")"
+
+          echo "$RESPONSE"
+
+          if echo "$RESPONSE" | jq -e '.ok == true' > /dev/null; then
+            exit 0
+          fi
+
+          MIGRATE_TO_CHAT_ID="$(echo "$RESPONSE" | jq -r '.parameters.migrate_to_chat_id // empty')"
+
+          if [ -n "$MIGRATE_TO_CHAT_ID" ]; then
+            echo "Telegram group was migrated to a supergroup."
+            echo "Update GitHub secret TG_CHAT_ID to: $MIGRATE_TO_CHAT_ID"
+          fi
+
+          exit 1

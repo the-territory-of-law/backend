@@ -3,7 +3,7 @@ name: Build and Deploy Backend
 on:
   workflow_run:
     workflows:
-      - lint-test-build
+      - CI
     types:
       - completed
     branches:

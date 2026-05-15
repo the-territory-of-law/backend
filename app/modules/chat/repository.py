@@ -291,7 +291,6 @@ class ChatRepository:
         through_message_id: int,
         at: datetime,
     ) -> list[int]:
-        """Помечает READ все входящие сообщения сделки с id ≤ watermark (не удалённые)."""
         stmt_ids = (
             select(ChatMessage.id)
             .where(

@@ -1,42 +1,48 @@
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Integer, Boolean, DateTime, Text, ForeignKey, Enum
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timezone
+from enum import Enum
 
-class Base(DeclarativeBase):
-	pass
+from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
 
-class Category(str, PyEnum):
+from app.core.orm_base import Base
+
+
+class Category(str, Enum):
     DEVORCE = "devorce"
     SHISHKA = "shishka"
 
-class BudgetType(str, PyEnum):
+
+class BudgetType(str, Enum):
     BIG = "big"
     BOMSH = "bomsh"
 
-class RequestStatusType(str, PyEnum):
+
+class RequestStatusType(str, Enum):
     OPEN = "open"
     CLOSED = "closed"
 
 
-class UserRequestBase(Base):
-	__tablename__ = "user_request"
+class UserRequest(Base):
+    __tablename__ = "user_request"
 
-	id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     client_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     category: Mapped[Category] = mapped_column(
-        Enum(Category, name="category"),
-        default=Category.DEVORCE
+        SAEnum(Category, name="category", native_enum=False),
+        default=Category.DEVORCE,
     )
     budget: Mapped[BudgetType] = mapped_column(
-        Enum(BudgetType, name="budget"),
-        default=BudgetType.BIG
+        SAEnum(BudgetType, name="budget", native_enum=False),
+        default=BudgetType.BIG,
     )
     status: Mapped[RequestStatusType] = mapped_column(
-        Enum(RequestStatusType, name="status"),
-        default=RequestStatusType.OPEN
+        SAEnum(RequestStatusType, name="request_status", native_enum=False),
+        default=RequestStatusType.OPEN,
     )
-	title: Mapped[str] = mapped_column(String())
-    description: Mapped[str] = mapped_column(String())
-    budget_value: Mapped[int] = mapped_column(Integer(), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime())
+    title: Mapped[str] = mapped_column(String())
+    description: Mapped[str] = mapped_column(Text())
+    budget_value: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )

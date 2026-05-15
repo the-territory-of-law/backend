@@ -36,6 +36,17 @@ def create_refresh_token(data: dict):
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
+def decode_access_token_user_id(token: str) -> int | None:
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if payload.get("type") != "access":
+            return None
+        sub = payload.get("sub")
+        return int(sub) if sub is not None else None
+    except JWTError:
+        return None
+
+
 def set_auth_cookies(response: Response, user_id: int):
     access_token = create_access_token({"sub": str(user_id)})
     refresh_token = create_refresh_token({"sub": str(user_id)})

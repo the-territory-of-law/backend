@@ -1,30 +1,36 @@
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Date, Integer, Boolean, DateTime, Text, ForeignKey, Enum
-from datetime import date, datetime
-from typing import Optional
+from datetime import datetime
+from enum import Enum
 
-class DisputeStatusType(str, PyEnum):
+from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, String
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.core.orm_base import Base
+
+
+class DisputeStatusType(str, Enum):
     OPEN = "open"
     RESOLVED = "resolved"
 
-class DisputeResolutionStatusType(str, PyEnum):
+
+class DisputeResolutionStatusType(str, Enum):
     CLIENT_WIN = "client_win"
     LAWYER_WIN = "lawyer_win"
     DRAW = "draw"
 
-class DisputeBase(Base):
-	__tablename__ = "dispute"
 
-	id: Mapped[int] = mapped_column(primary_key=True)
+class Dispute(Base):
+    __tablename__ = "dispute"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     deal_id: Mapped[int] = mapped_column(ForeignKey("deal.id"))
     opened_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
     status: Mapped[DisputeStatusType] = mapped_column(
-        Enum(DisputeStatusType, name="dispute_status"),
-        default=DisputeStatusType.OPEN
+        SAEnum(DisputeStatusType, name="dispute_status", native_enum=False),
+        default=DisputeStatusType.OPEN,
     )
     reason: Mapped[str] = mapped_column(String())
     resolution: Mapped[DisputeResolutionStatusType] = mapped_column(
-        Enum(DisputeResolutionStatusType, name="dispute_resolution_status"),
-        default=DisputeResolutionStatusType.DRAW
+        SAEnum(DisputeResolutionStatusType, name="dispute_resolution_status", native_enum=False),
+        default=DisputeResolutionStatusType.DRAW,
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

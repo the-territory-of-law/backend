@@ -14,16 +14,26 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Override URL from env variable if provided.
+# Override URL from env; Alembic needs sync driver (not asyncpg).
 database_url = os.getenv("DATABASE_URL")
 if database_url:
-    config.set_main_option("sqlalchemy.url", database_url)
+    sync_url = database_url
+    if sync_url.startswith("postgresql+asyncpg://"):
+        sync_url = "postgresql+psycopg://" + sync_url.removeprefix("postgresql+asyncpg://")
+    elif sync_url.startswith("sqlite+aiosqlite:"):
+        sync_url = sync_url.replace("sqlite+aiosqlite:", "sqlite:", 1)
+    config.set_main_option("sqlalchemy.url", sync_url)
 
-# Import models metadata here when model files become stable.
-# Example:
-# from app.db.base import Base
-# target_metadata = Base.metadata
-target_metadata = None
+from app.core.orm_base import Base
+
+import app.modules.users.models  # noqa: F401
+import app.modules.requests.models  # noqa: F401
+import app.modules.lawyer_profiles.models  # noqa: F401
+import app.modules.offers.models  # noqa: F401
+import app.modules.deals.models  # noqa: F401
+import app.modules.chat.models  # noqa: F401
+
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:

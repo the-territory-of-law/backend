@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
@@ -17,7 +19,8 @@ class UserRepository:
             username=user_data.name,
             hashed_password=hashed_password,
             email=user_data.email,
-            role=user_data.role
+            role=user_data.role,
+            created_at=datetime.now(timezone.utc),
         )
         self.session.add(user)
         await self.session.commit()

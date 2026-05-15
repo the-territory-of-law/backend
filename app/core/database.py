@@ -1,11 +1,11 @@
-import os
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-# Example:
-# DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/db_name
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./app.db")
+from app.core.config import Settings
+
+_settings = Settings()
+DATABASE_URL = _settings.DATABASE_URL
 
 engine = create_async_engine(
     DATABASE_URL,
@@ -27,7 +27,14 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db() -> None:
-    from app.modules.users.models import Base
+    from app.core.orm_base import Base
+
+    import app.modules.users.models  # noqa: F401
+    import app.modules.requests.models  # noqa: F401
+    import app.modules.lawyer_profiles.models  # noqa: F401
+    import app.modules.offers.models  # noqa: F401
+    import app.modules.deals.models  # noqa: F401
+    import app.modules.chat.models  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

@@ -33,6 +33,9 @@ COPY app ./app
 COPY alembic.ini ./
 COPY alembic ./alembic
 
+RUN mkdir -p /app/data/uploads/chat && \
+    chown -R app:app /app/data
+
 USER app
 
 EXPOSE 8000

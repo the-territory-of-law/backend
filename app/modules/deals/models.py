@@ -1,29 +1,29 @@
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Date, Integer, Boolean, DateTime, Text, ForeignKey, Enum
 from datetime import date, datetime
-from typing import Optional
+from enum import Enum
 
-class Base(DeclarativeBase):
-	pass
+from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Integer
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.core.orm_base import Base
 
 
-class DealStatusType(str, PyEnum):
+class DealStatusType(str, Enum):
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
 
 
-class DealBase(Base):
-	__tablename__ = "deal"
+class Deal(Base):
+    __tablename__ = "deal"
 
-	id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     request_id: Mapped[int] = mapped_column(ForeignKey("user_request.id"))
     offer_id: Mapped[int] = mapped_column(ForeignKey("lawyer_offer.id"))
     status: Mapped[DealStatusType] = mapped_column(
-        Enum(DealStatusType, name="deal_status"),
-        default=DealStatusType.IN_PROGRESS
+        SAEnum(DealStatusType, name="deal_status", native_enum=False),
+        default=DealStatusType.IN_PROGRESS,
     )
     amount: Mapped[int] = mapped_column(Integer())
     platform_fee: Mapped[int] = mapped_column(Integer())
     lawyer_amount: Mapped[int] = mapped_column(Integer())
-    paid_at: Mapped[datetime] = mapped_column(DateTime())
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

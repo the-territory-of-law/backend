@@ -7,6 +7,7 @@ from app.core.config import Settings
 from app.core.database import get_db
 from app.common.dependencies.dependencies import get_current_user
 from app.core.security import (
+    TOKEN_TYPE_REFRESH,
     set_auth_cookies,
     clear_auth_cookies,
     create_access_token,
@@ -53,7 +54,7 @@ async def refresh_token(
 
     try:
         payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        if payload.get("type") != "refresh":
+        if payload.get("type") != TOKEN_TYPE_REFRESH:
             raise HTTPException(status_code=401)
 
         user_id = payload.get("sub")

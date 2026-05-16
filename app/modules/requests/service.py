@@ -118,7 +118,8 @@ class UserRequestService:
         _require_open(user_request)
 
         updated = await self.repo.update_user_request(request_id, data)
-        assert updated is not None
+        if updated is None:
+            raise HTTPException(status_code=404, detail="Request not found")
         return UserRequestResponse.model_validate(updated)
 
     async def close(
@@ -133,5 +134,6 @@ class UserRequestService:
             raise HTTPException(status_code=400, detail="Request is already closed")
 
         closed = await self.repo.close_user_request(request_id)
-        assert closed is not None
+        if closed is None:
+            raise HTTPException(status_code=404, detail="Request not found")
         return UserRequestResponse.model_validate(closed)

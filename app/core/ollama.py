@@ -6,9 +6,10 @@ import asyncio
 import json
 import logging
 import re
-import urllib.error
-import urllib.request
 from dataclasses import dataclass
+from urllib.parse import urlparse
+
+import httpx
 
 from app.core.config import Settings
 
@@ -45,21 +46,26 @@ class OllamaModerationResult:
     ollama_error: str | None = None
 
 
+def _validate_http_url(url: str) -> None:
+    scheme = urlparse(url).scheme
+    if scheme not in ("http", "https"):
+        raise ValueError(f"Unsupported URL scheme: {scheme!r}")
+
+
 def _request_json(
     method: str,
     url: str,
     payload: dict | None = None,
     timeout_sec: float = 10.0,
 ) -> dict:
-    data = None if payload is None else json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=data,
-        headers={"Content-Type": "application/json"} if data else {},
-        method=method,
-    )
-    with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    _validate_http_url(url)
+    with httpx.Client(timeout=timeout_sec) as client:
+        if method == "GET":
+            response = client.get(url)
+        else:
+            response = client.request(method, url, json=payload)
+        response.raise_for_status()
+        return response.json()
 
 
 def check_ollama_health_sync(settings: Settings | None = None) -> OllamaHealth:
@@ -80,7 +86,7 @@ def check_ollama_health_sync(settings: Settings | None = None) -> OllamaHealth:
     tags_url = f"{base.rstrip('/')}/api/tags"
     try:
         body = _request_json("GET", tags_url, timeout_sec=min(cfg.OLLAMA_REQUEST_TIMEOUT_SEC, 10.0))
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
+    except (httpx.HTTPError, json.JSONDecodeError, OSError) as exc:
         return OllamaHealth(
             enabled=True,
             base_url=base,
@@ -148,7 +154,7 @@ def moderate_text_sync(text: str, settings: Settings | None = None) -> OllamaMod
             payload,
             timeout_sec=cfg.OLLAMA_REQUEST_TIMEOUT_SEC,
         )
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
+    except (httpx.HTTPError, json.JSONDecodeError, OSError) as exc:
         logger.warning("Ollama moderation request failed: %s", exc)
         return OllamaModerationResult(False, None, used_ollama=True, ollama_error=str(exc))
 

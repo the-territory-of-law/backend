@@ -1,6 +1,6 @@
 from enum import StrEnum
 from typing import Optional
-from datetime import datetime, date
+from datetime import date
 from pydantic import BaseModel, ConfigDict
 
 class OfferStatusType(StrEnum):

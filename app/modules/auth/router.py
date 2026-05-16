@@ -5,10 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.database import get_db
+from app.common.dependencies.dependencies import get_current_user
 from app.core.security import (
+    TOKEN_TYPE_REFRESH,
     set_auth_cookies,
     clear_auth_cookies,
-    get_current_user_from_cookie,
     create_access_token,
 )
 from app.modules.users.models import User
@@ -53,7 +54,7 @@ async def refresh_token(
 
     try:
         payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        if payload.get("type") != "refresh":
+        if payload.get("type") != TOKEN_TYPE_REFRESH:
             raise HTTPException(status_code=401)
 
         user_id = payload.get("sub")
@@ -81,9 +82,7 @@ async def refresh_token(
 @router.post("/logout")
 async def logout(
     response: Response,
-    request: Request,
-    db: AsyncSession = Depends(get_db)
+    _user: User = Depends(get_current_user),
 ):
-    await get_current_user_from_cookie(request, db)
     clear_auth_cookies(response)
     return {"message": "Logged out"}

@@ -11,6 +11,9 @@ from datetime import datetime, timedelta, timezone
 
 settings = Settings()
 
+TOKEN_TYPE_ACCESS = "access"
+TOKEN_TYPE_REFRESH = "refresh"
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
@@ -25,21 +28,21 @@ def verify_password(password: str, hashed_password: str) -> bool:
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=15))
-    to_encode.update({"exp": expire, "type": "access"})
+    to_encode.update({"exp": expire, "type": TOKEN_TYPE_ACCESS})
     return jwt.encode(claims=to_encode, key=settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
 def create_refresh_token(data: dict):
     expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode = data.copy()
-    to_encode.update({"exp": expire, "type": "refresh"})
+    to_encode.update({"exp": expire, "type": TOKEN_TYPE_REFRESH})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
 def decode_access_token_user_id(token: str) -> int | None:
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        if payload.get("type") != "access":
+        if payload.get("type") != TOKEN_TYPE_ACCESS:
             return None
         sub = payload.get("sub")
         return int(sub) if sub is not None else None
@@ -85,7 +88,7 @@ async def get_current_user_from_cookie(request: Request, db_session: AsyncSessio
         user_id: str = payload.get("sub")
         token_type: str = payload.get("type")
 
-        if user_id is None or token_type != "access":
+        if user_id is None or token_type != TOKEN_TYPE_ACCESS:
             raise HTTPException(status_code=401, detail="Invalid token")
 
     except JWTError:

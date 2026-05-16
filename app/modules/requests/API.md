@@ -2,7 +2,7 @@
 
 Документация по заявкам клиентов.
 
-Статус: **предлагаемый API (draft, HTTP ещё не реализован)**.
+Статус: **реализовано** (HTTP).
 
 Базовый префикс: `/requests`.
 
@@ -122,8 +122,8 @@ GET /requests
 | `category` | `string` | Категория |
 | `budget_min` | `integer` | Минимум `budget_value` |
 | `budget_max` | `integer` | Максимум `budget_value` |
-| `limit` | `integer` | Лимит |
-| `offset` | `integer` | Смещение |
+| `page` | `integer` | Страница (по умолчанию `1`) |
+| `size` | `integer` | Размер страницы (по умолчанию `10`, макс. `100`) |
 
 ### Ответ `200`
 

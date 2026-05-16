@@ -11,6 +11,7 @@ from app.core.startup_ollama import prepare_ollama_on_startup
 from app.modules.auth.router import router as auth_router
 from app.modules.chat.router import router as chat_router
 from app.modules.chat.ws_routes import router as chat_ws_router
+from app.modules.requests.router import router as requests_router
 from app.modules.users.router import router as users_router
 
 settings = Settings()
@@ -37,6 +38,7 @@ if _cors_origins:
 
 app.include_router(auth_router)
 app.include_router(users_router)
+app.include_router(requests_router)
 app.include_router(chat_router)
 app.include_router(chat_ws_router)
 app.mount(

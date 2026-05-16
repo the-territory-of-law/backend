@@ -13,8 +13,8 @@ from fastapi import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.dependencies.dependencies import get_current_user
 from app.core.database import get_db
-from app.core.security import get_current_user_from_cookie
 from app.modules.chat.connection_manager import deal_chat_manager
 from app.modules.chat.participant import deal_exists, is_deal_participant
 from app.modules.chat.schemas import (
@@ -49,10 +49,6 @@ from app.modules.users.models import User
 router = APIRouter(prefix="/chats", tags=["chat"])
 
 
-async def _get_current_user(request: Request, db: AsyncSession) -> User:
-    return await get_current_user_from_cookie(request, db)
-
-
 async def _require_deal_chat_access(db: AsyncSession, user_id: int, deal_id: int) -> None:
     if not await deal_exists(db, deal_id):
         raise HTTPException(status_code=404, detail="Deal not found")
@@ -62,12 +58,11 @@ async def _require_deal_chat_access(db: AsyncSession, user_id: int, deal_id: int
 
 @router.get("", response_model=list[ChatListItemResponse])
 async def get_my_chats(
-    request: Request,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     limit: int = 50,
     offset: int = 0,
 ):
-    user = await _get_current_user(request, db)
     safe_limit = min(max(limit, 1), 100)
     safe_offset = max(offset, 0)
     return await list_user_chats(db, user.id, safe_limit, safe_offset)
@@ -76,12 +71,11 @@ async def get_my_chats(
 @router.get("/{deal_id}/messages", response_model=ChatMessagesPageResponse)
 async def get_chat_messages(
     deal_id: int,
-    request: Request,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     limit: int = 50,
     offset: int = 0,
 ):
-    user = await _get_current_user(request, db)
     await _require_deal_chat_access(db, user.id, deal_id)
     await mark_inbox_delivered(db, deal_id, user.id)
     safe_limit = min(max(limit, 1), 200)
@@ -93,10 +87,9 @@ async def get_chat_messages(
 async def mark_chat_read_through(
     deal_id: int,
     payload: ChatReadThroughRequest,
-    request: Request,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    user = await _get_current_user(request, db)
     await _require_deal_chat_access(db, user.id, deal_id)
     through_id, read_at, marked = await mark_messages_read_through(
         db, deal_id, user.id, payload.message_id
@@ -119,11 +112,10 @@ async def mark_chat_read_through(
 )
 async def upload_chat_attachment(
     deal_id: int,
-    request: Request,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     file: UploadFile = File(...),
 ):
-    user = await _get_current_user(request, db)
     await _require_deal_chat_access(db, user.id, deal_id)
     data = await file.read()
     return await save_uploaded_attachment(
@@ -140,9 +132,9 @@ async def upload_chat_attachment(
 async def send_message_http(
     deal_id: int,
     request: Request,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    user = await _get_current_user(request, db)
     await _require_deal_chat_access(db, user.id, deal_id)
 
     ct = (request.headers.get("content-type") or "").lower()
@@ -200,10 +192,9 @@ async def send_message_http(
 async def edit_message(
     message_id: int,
     payload: ChatUpdateMessageRequest,
-    request: Request,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    user = await _get_current_user(request, db)
     text_value = payload.text.strip()
     updated = await update_chat_message(db, message_id, user.id, text_value)
     deal_id = updated.deal_id
@@ -222,10 +213,9 @@ async def edit_message(
 @router.delete("/messages/{message_id}", status_code=204)
 async def remove_message(
     message_id: int,
-    request: Request,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    user = await _get_current_user(request, db)
     deal_id, deleted_at = await soft_delete_chat_message(db, message_id, user.id)
     await deal_chat_manager.broadcast_json(
         deal_id,
